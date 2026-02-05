@@ -1,6 +1,6 @@
 # Calendar - a better clock app for macOS
 
-Download latest version: [Calendar.dmg.zip](https://github.com/DoAutumn/Calendar/raw/master/builds/Calendar.dmg) (supports macOS Sierra 10.12 and higher)
+Download latest version: [Calendar.dmg](https://github.com/DoAutumn/Calendar/raw/master/builds/Calendar.dmg) (supports macOS Sierra 10.12 and higher)
 
 A simple, clean calendar and clock app for macOS. Inspired by [Itsycal](https://github.com/sfsam/Itsycal), but purposefully constructed to be a lot simpler and adhere to macOS' native styles.
 

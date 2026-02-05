@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="23504" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
+    <dependencies>
+        <deployment identifier="macosx"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="23504"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="NSApplication">
+            <connections>
+                <outlet property="delegate" destination="Voe-Tx-rLC" id="GzC-gU-4Uq"/>
+            </connections>
+        </customObject>
+        <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="Calendar" customModuleProvider="target">
+            <connections>
+                <outlet property="appController" destination="3bX-Tg-Ykk" id="QW8-ML-LeH"/>
+            </connections>
+        </customObject>
+        <customObject id="YLy-65-1bz" customClass="NSFontManager"/>
+        <customObject id="SjA-MT-ZkN" customClass="CalendarController" customModule="Calendar" customModuleProvider="target"/>
+        <customObject id="MUN-z6-qDm" customClass="SettingsController" customModule="Calendar" customModuleProvider="target">
+            <connections>
+                <outlet property="calendarController" destination="SjA-MT-ZkN" id="OCh-2P-AQ8"/>
+                <outlet property="showAMPMBox" destination="oWQ-Vp-99m" id="ZpL-b7-vyS"/>
+                <outlet property="showDateBox" destination="qib-nV-OYJ" id="mow-4N-fy8"/>
+                <outlet property="showDayOfWeekBox" destination="sw3-iQ-hki" id="VIU-SJ-3w9"/>
+                <outlet property="showSecondsBox" destination="DsG-Kg-fxR" id="a3Q-Z4-nsY"/>
+                <outlet property="use24HoursBox" destination="E8n-nc-rfB" id="O1q-22-QEZ"/>
+            </connections>
+        </customObject>
+        <customObject id="3bX-Tg-Ykk" customClass="MainMenuController" customModule="Calendar" customModuleProvider="target">
+            <connections>
+                <outlet property="apiMenuItem" destination="GmB-eQ-Api" id="3bK-sF-BeF"/>
+                <outlet property="buttonLeft" destination="Q5d-GP-dLa" id="Kpc-3N-yGK"/>
+                <outlet property="buttonRight" destination="8Sx-tC-GbY" id="RIK-6A-xmc"/>
+                <outlet property="collectionView" destination="maz-ht-22y" id="stj-LN-h6m"/>
+                <outlet property="controller" destination="SjA-MT-ZkN" id="UEa-Cz-Kob"/>
+                <outlet property="monthLabel" destination="j2b-bI-i9v" id="x4g-bh-2an"/>
+                <outlet property="settingsWindow" destination="2fn-5w-bKg" id="AE8-fj-0H9"/>
+                <outlet property="statusMenu" destination="Rpa-pt-dYz" id="3aK-wK-BeF"/>
+            </connections>
+        </customObject>
+        <menu id="Rpa-pt-dYz">
+            <items>
+                <menuItem title="[Calendar Collection]" id="VJE-7c-auX">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <outlet property="view" destination="IaI-2C-Pq8" id="1ja-Id-oug"/>
+                    </connections>
+                </menuItem>
+                <menuItem isSeparatorItem="YES" id="gAV-uw-5MX"/>
+                <menuItem title="Settings" id="GmB-eQ-Uw8">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="openSettingsClicked:" target="3bX-Tg-Ykk" id="PDc-6Q-w7L"/>
+                    </connections>
+                </menuItem>
+                <menuItem title="API: " id="GmB-eQ-Api">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="refreshHolidayData:" target="3bX-Tg-Ykk" id="new-connection"/>
+                    </connections>
+                </menuItem>
+            </items>
+            <point key="canvasLocation" x="-109.5" y="-89.5"/>
+        </menu>
+        <customView id="IaI-2C-Pq8">
+            <rect key="frame" x="0.0" y="0.0" width="350" height="285"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+            <subviews>
+                <scrollView borderType="none" autohidesScrollers="YES" horizontalLineScroll="0.0" horizontalPageScroll="0.0" verticalLineScroll="0.0" verticalPageScroll="0.0" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" verticalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="LBc-DF-c7o">
+                    <rect key="frame" x="10" y="0.0" width="330" height="245"/>
+                    <clipView key="contentView" drawsBackground="NO" copiesOnScroll="NO" id="n43-Ml-piN">
+                        <rect key="frame" x="0.0" y="0.0" width="330" height="245"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                        <subviews>
+                            <collectionView autoresizesSubviews="NO" id="maz-ht-22y">
+                                <rect key="frame" x="0.0" y="0.0" width="330" height="245"/>
+                                <autoresizingMask key="autoresizingMask" widthSizable="YES"/>
+                                <collectionViewFlowLayout key="collectionViewLayout" minimumInteritemSpacing="8" id="Rt7-Fz-vIc">
+                                    <size key="itemSize" width="40" height="35"/>
+                                </collectionViewFlowLayout>
+                                <color key="primaryBackgroundColor" red="1" green="1" blue="1" alpha="0.0" colorSpace="custom" customColorSpace="sRGB"/>
+                                <connections>
+                                    <outlet property="dataSource" destination="3bX-Tg-Ykk" id="99k-re-FtM"/>
+                                </connections>
+                            </collectionView>
+                        </subviews>
+                        <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <edgeInsets key="contentInsets" left="0.0" right="0.0" top="0.0" bottom="0.0"/>
+                    </clipView>
+                    <edgeInsets key="contentInsets" left="0.0" right="0.0" top="0.0" bottom="0.0"/>
+                    <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" doubleValue="0.5" horizontal="YES" id="Vt0-3b-5Kk">
+                        <rect key="frame" x="-100" y="-100" width="224" height="16"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                    </scroller>
+                    <scroller key="verticalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="p1v-Sx-CEK">
+                        <rect key="frame" x="240" y="0.0" width="16" height="200"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                    </scroller>
+                </scrollView>
+                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Q5d-GP-dLa">
+                    <rect key="frame" x="0.0" y="253" width="60" height="20"/>
+                    <buttonCell key="cell" type="roundRect" title="◀" bezelStyle="roundedRect" alignment="center" imageScaling="proportionallyDown" inset="2" id="JkT-H5-zCl">
+                        <behavior key="behavior" lightByContents="YES"/>
+                        <font key="font" metaFont="cellTitle"/>
+                        <string key="keyEquivalent"></string>
+                    </buttonCell>
+                    <constraints>
+                        <constraint firstAttribute="height" constant="20" id="0Tb-la-vqc"/>
+                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="60" id="BFl-IJ-uMo"/>
+                    </constraints>
+                    <connections>
+                        <action selector="leftClicked:" target="3bX-Tg-Ykk" id="TcB-k5-ERU"/>
+                    </connections>
+                </button>
+                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="8Sx-tC-GbY">
+                    <rect key="frame" x="290" y="253" width="60" height="20"/>
+                    <buttonCell key="cell" type="roundRect" title="▶" bezelStyle="roundedRect" alignment="center" imageScaling="proportionallyDown" inset="2" id="gys-YA-Nr4">
+                        <behavior key="behavior" lightByContents="YES"/>
+                        <font key="font" metaFont="cellTitle"/>
+                        <string key="keyEquivalent"></string>
+                    </buttonCell>
+                    <constraints>
+                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="60" id="3Xh-pg-AZ8"/>
+                        <constraint firstAttribute="height" constant="20" id="yHA-u9-uZu"/>
+                    </constraints>
+                    <connections>
+                        <action selector="rightClicked:" target="3bX-Tg-Ykk" id="xZe-XW-Ldw"/>
+                    </connections>
+                </button>
+                <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="j2b-bI-i9v">
+                    <rect key="frame" x="100" y="248" width="150" height="30"/>
+                    <buttonCell key="cell" type="roundRect" title="September 2015" bezelStyle="roundedRect" alignment="center" imageScaling="proportionallyDown" inset="2" id="5Js-yS-1ZZ">
+                        <behavior key="behavior" lightByContents="YES"/>
+                        <font key="font" metaFont="system" size="20"/>
+                        <string key="keyEquivalent" base64-UTF8="YES">
+IA
+</string>
+                    </buttonCell>
+                    <constraints>
+                        <constraint firstAttribute="height" constant="30" id="fJZ-dg-HdR"/>
+                    </constraints>
+                    <connections>
+                        <action selector="clearMonthHopping:" target="3bX-Tg-Ykk" id="x9i-lT-shF"/>
+                    </connections>
+                </button>
+            </subviews>
+            <constraints>
+                <constraint firstItem="8Sx-tC-GbY" firstAttribute="top" secondItem="IaI-2C-Pq8" secondAttribute="top" constant="12" id="0KD-gx-hfv"/>
+                <constraint firstItem="8Sx-tC-GbY" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="IaI-2C-Pq8" secondAttribute="leading" constant="20" symbolic="YES" id="12C-gU-VIj"/>
+                <constraint firstAttribute="trailing" secondItem="LBc-DF-c7o" secondAttribute="trailing" constant="10" id="9zG-2l-PtV"/>
+                <constraint firstItem="j2b-bI-i9v" firstAttribute="centerX" secondItem="LBc-DF-c7o" secondAttribute="centerX" id="Gea-SX-Snw"/>
+                <constraint firstItem="LBc-DF-c7o" firstAttribute="leading" secondItem="IaI-2C-Pq8" secondAttribute="leading" constant="10" id="SGb-LG-AXf"/>
+                <constraint firstItem="Q5d-GP-dLa" firstAttribute="leading" secondItem="IaI-2C-Pq8" secondAttribute="leading" id="Y28-F3-D3N"/>
+                <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="j2b-bI-i9v" secondAttribute="trailing" id="hAN-5T-u6B"/>
+                <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="Q5d-GP-dLa" secondAttribute="trailing" constant="20" symbolic="YES" id="jR3-hf-I3P"/>
+                <constraint firstAttribute="bottom" secondItem="LBc-DF-c7o" secondAttribute="bottom" id="nQC-Vv-jxW"/>
+                <constraint firstItem="j2b-bI-i9v" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="IaI-2C-Pq8" secondAttribute="leading" id="nhd-Sm-UW2"/>
+                <constraint firstItem="LBc-DF-c7o" firstAttribute="top" secondItem="j2b-bI-i9v" secondAttribute="bottom" constant="3" id="olh-fk-zam"/>
+                <constraint firstAttribute="trailing" secondItem="8Sx-tC-GbY" secondAttribute="trailing" id="r1K-iE-QtK"/>
+                <constraint firstItem="LBc-DF-c7o" firstAttribute="top" secondItem="IaI-2C-Pq8" secondAttribute="top" constant="40" id="sbp-a5-6NZ"/>
+                <constraint firstItem="Q5d-GP-dLa" firstAttribute="top" secondItem="IaI-2C-Pq8" secondAttribute="top" constant="12" id="tsZ-rC-hk6"/>
+            </constraints>
+            <point key="canvasLocation" x="-110" y="131"/>
+        </customView>
+        <window title="Settings" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="" animationBehavior="default" id="2fn-5w-bKg">
+            <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES"/>
+            <windowCollectionBehavior key="collectionBehavior" fullScreenNone="YES"/>
+            <rect key="contentRect" x="564" y="309" width="410" height="250"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1415"/>
+            <value key="minSize" type="size" width="410" height="250"/>
+            <value key="maxSize" type="size" width="410" height="250"/>
+            <view key="contentView" id="z56-gW-g35">
+                <rect key="frame" x="0.0" y="0.0" width="410" height="250"/>
+                <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <button tag="1" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="DsG-Kg-fxR">
+                        <rect key="frame" x="139" y="194" width="220" height="30"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <buttonCell key="cell" type="check" title="Show the time with seconds" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="YBS-XV-zIF">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="checkBoxClicked:" target="MUN-z6-qDm" id="0DQ-oF-JYj"/>
+                        </connections>
+                    </button>
+                    <button tag="2" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="E8n-nc-rfB">
+                        <rect key="frame" x="139" y="162" width="220" height="30"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <buttonCell key="cell" type="check" title="Use a 24-hour clock" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="X0B-xC-XWg">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="checkBoxClicked:" target="MUN-z6-qDm" id="b6T-PW-c9s"/>
+                        </connections>
+                    </button>
+                    <button tag="3" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="oWQ-Vp-99m">
+                        <rect key="frame" x="139" y="130" width="220" height="30"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <buttonCell key="cell" type="check" title="Show AM/PM" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="wHM-Vz-n6I">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="checkBoxClicked:" target="MUN-z6-qDm" id="Em2-DF-Vt2"/>
+                        </connections>
+                    </button>
+                    <button tag="4" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="qib-nV-OYJ">
+                        <rect key="frame" x="139" y="66" width="220" height="30"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <buttonCell key="cell" type="check" title="Show date" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="BDg-ZQ-zFx">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="checkBoxClicked:" target="MUN-z6-qDm" id="NrB-aN-wmX"/>
+                        </connections>
+                    </button>
+                    <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="DuK-RT-lm9">
+                        <rect key="frame" x="31" y="196" width="93" height="22"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Time options" usesSingleLineMode="YES" id="V7g-VS-7tR">
+                            <font key="font" metaFont="system"/>
+                            <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                            <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                        </textFieldCell>
+                    </textField>
+                    <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="YMg-hJ-eoO">
+                        <rect key="frame" x="31" y="68" width="93" height="22"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Date options" usesSingleLineMode="YES" id="fRr-jF-hAT">
+                            <font key="font" metaFont="system"/>
+                            <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                            <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                        </textFieldCell>
+                    </textField>
+                    <button tag="5" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="sw3-iQ-hki">
+                        <rect key="frame" x="139" y="34" width="220" height="30"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <buttonCell key="cell" type="check" title="Show the day of the week" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="SJf-Zh-g4M">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="checkBoxClicked:" target="MUN-z6-qDm" id="9o9-nG-vbd"/>
+                        </connections>
+                    </button>
+                </subviews>
+            </view>
+            <connections>
+                <outlet property="delegate" destination="MUN-z6-qDm" id="pyF-2S-Dp6"/>
+            </connections>
+            <point key="canvasLocation" x="-150" y="467"/>
+        </window>
+    </objects>
+</document>

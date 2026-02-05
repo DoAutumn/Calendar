@@ -1,6 +1,6 @@
-# CornerCal - a better clock app for macOS
+# Calendar - a better clock app for macOS
 
-Download latest version: [CornerCal.dmg.zip](https://github.com/ekreutz/CornerCal/raw/master/builds/CornerCal.dmg.zip) (supports macOS Sierra 10.12 and higher)
+Download latest version: [Calendar.dmg.zip](https://github.com/DoAutumn/Calendar/raw/master/builds/Calendar.dmg) (supports macOS Sierra 10.12 and higher)
 
 A simple, clean calendar and clock app for macOS. Inspired by [Itsycal](https://github.com/sfsam/Itsycal), but purposefully constructed to be a lot simpler and adhere to macOS' native styles.
 
@@ -20,7 +20,7 @@ Upcoming features:
 
 - Keyboard shortcuts to click through calendar
 
-Features that you won't see in CornerCal (at least not by me!):
+Features that you won't see in Calendar (at least not by me!):
 
 - Custom calendar features such as events and reminders.
 - Heavy themes that don't fit the style of macOS

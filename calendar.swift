@@ -15,6 +15,7 @@ struct SettingsKeys {
     let showAMPM = "AM_PM"
     let showDate = "SHOW_DATE"
     let showDayOfWeek = "DAY_OF_WEEK"
+    let showMonthAbbreviations = "SHOW_MONTH_ABBREVIATIONS"
 }
 
 enum Settings {
@@ -41,6 +42,10 @@ enum Settings {
         get { d.bool(forKey: keys.showDayOfWeek) }
         set { d.set(newValue, forKey: keys.showDayOfWeek) }
     }
+    static var showMonthAbbreviations: Bool {
+        get { d.bool(forKey: keys.showMonthAbbreviations) }
+        set { d.set(newValue, forKey: keys.showMonthAbbreviations) }
+    }
 
     static func registerDefaults() {
         let defaults: [String: Any] = [
@@ -49,6 +54,7 @@ enum Settings {
             keys.showDayOfWeek: true,
             keys.use24Hours: true,
             keys.showAMPM: true,
+            keys.showMonthAbbreviations: true,
         ]
         for (key, value) in defaults where d.object(forKey: key) == nil {
             d.set(value, forKey: key)
@@ -813,7 +819,14 @@ final class MonthAbbreviationView: NSView {
 
     @objc private func monthTapped(_ sender: NSButton) {
         let index = sender.tag
-        expandedIndex = (expandedIndex == index) ? nil : index
+        if expandedIndex == index {
+            expandedIndex = nil
+        } else {
+            expandedIndex = index
+            let fullName = Self.fullNames[index]
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(fullName, forType: .string)
+        }
         refreshTitles()
     }
 }
@@ -823,11 +836,12 @@ final class MonthAbbreviationView: NSView {
 final class SettingsWindowController: NSWindowController {
     private let model: CalendarModel
     private var boxes: [NSButton] = []
+    var onMenuAppearanceChange: (() -> Void)?
 
     init(model: CalendarModel) {
         self.model = model
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 410, height: 250),
+            contentRect: NSRect(x: 0, y: 0, width: 410, height: 282),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -846,11 +860,11 @@ final class SettingsWindowController: NSWindowController {
         guard let content = window?.contentView else { return }
 
         let timeLabel = makeSectionLabel("Time options")
-        timeLabel.frame = NSRect(x: 31, y: 196, width: 93, height: 22)
+        timeLabel.frame = NSRect(x: 31, y: 228, width: 93, height: 22)
         content.addSubview(timeLabel)
 
         let dateLabel = makeSectionLabel("Date options")
-        dateLabel.frame = NSRect(x: 31, y: 68, width: 93, height: 22)
+        dateLabel.frame = NSRect(x: 31, y: 100, width: 93, height: 22)
         content.addSubview(dateLabel)
 
         let titles = [
@@ -859,13 +873,14 @@ final class SettingsWindowController: NSWindowController {
             "Show AM/PM",
             "Show date",
             "Show the day of the week",
+            "Show month abbreviations",
         ]
-        let ys: [CGFloat] = [194, 162, 130, 66, 34]
+        let ys: [CGFloat] = [226, 194, 162, 98, 66, 34]
 
         for (i, title) in titles.enumerated() {
             let box = NSButton(checkboxWithTitle: title, target: self, action: #selector(checkBoxClicked(_:)))
             box.tag = i + 1
-            box.frame = NSRect(x: 139, y: ys[i], width: 220, height: 30)
+            box.frame = NSRect(x: 139, y: ys[i], width: 240, height: 30)
             content.addSubview(box)
             boxes.append(box)
         }
@@ -895,6 +910,7 @@ final class SettingsWindowController: NSWindowController {
             Settings.showAMPM,
             Settings.showDate,
             Settings.showDayOfWeek,
+            Settings.showMonthAbbreviations,
         ]
         for (i, box) in boxes.enumerated() {
             box.state = values[i] ? .on : .off
@@ -914,6 +930,9 @@ final class SettingsWindowController: NSWindowController {
         case 3: Settings.showAMPM = sender.state == .on
         case 4: Settings.showDate = sender.state == .on
         case 5: Settings.showDayOfWeek = sender.state == .on
+        case 6:
+            Settings.showMonthAbbreviations = sender.state == .on
+            onMenuAppearanceChange?()
         default: break
         }
         updateAMPMEnabled()
@@ -965,6 +984,7 @@ final class AppController: NSObject, NSMenuDelegate {
     private var calendarView: CalendarMenuView!
     private var settingsController: SettingsWindowController!
     private var statusMenu: NSMenu!
+    private var monthAbbrevItem: NSMenuItem!
     private var apiMenuItem: NSMenuItem!
     private var apiStatusView: APIStatusView!
     private var refreshing = false
@@ -973,6 +993,9 @@ final class AppController: NSObject, NSMenuDelegate {
         Settings.registerDefaults()
         calendarView = CalendarMenuView(model: model)
         settingsController = SettingsWindowController(model: model)
+        settingsController.onMenuAppearanceChange = { [weak self] in
+            self?.updateMonthAbbrevVisibility()
+        }
 
         statusMenu = NSMenu()
         statusMenu.delegate = self
@@ -982,9 +1005,10 @@ final class AppController: NSObject, NSMenuDelegate {
         statusMenu.addItem(calendarItem)
         statusMenu.addItem(.separator())
 
-        let monthAbbrevItem = NSMenuItem()
+        monthAbbrevItem = NSMenuItem()
         monthAbbrevItem.view = MonthAbbreviationView()
         statusMenu.addItem(monthAbbrevItem)
+        updateMonthAbbrevVisibility()
 
         let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -1017,8 +1041,13 @@ final class AppController: NSObject, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        updateMonthAbbrevVisibility()
         updateCalendar()
         updateMenuTime()
+    }
+
+    private func updateMonthAbbrevVisibility() {
+        monthAbbrevItem?.isHidden = !Settings.showMonthAbbreviations
     }
 
     private func bindModelCallbacks() {

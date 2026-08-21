@@ -386,6 +386,51 @@ final class CalendarModel {
         return monthFormatter.string(from: currentMonth)
     }
 
+    /// Lunar date for the header under「月份 年」.
+    /// Current month → today; other months → that month's 1st.
+    /// Example: `丙午年 七月初九`
+    func getLunarMonthHeader() -> String {
+        guard let currentMonth else { return "" }
+        let now = Date()
+        let reference: Date
+        if calendar.isDate(currentMonth, equalTo: now, toGranularity: .month) {
+            reference = now
+        } else {
+            let parts = calendar.dateComponents([.year, .month], from: currentMonth)
+            guard let firstOfMonth = calendar.date(from: parts) else { return "" }
+            reference = firstOfMonth
+        }
+        return formatLunarDate(reference)
+    }
+
+    private func formatLunarDate(_ date: Date) -> String {
+        let chineseCal = Calendar(identifier: .chinese)
+        let comps = chineseCal.dateComponents([.year, .month, .day], from: date)
+        guard let year = comps.year, let month = comps.month, let day = comps.day,
+              (1...12).contains(month), (1...30).contains(day) else { return "" }
+
+        let stems = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
+        let branches = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
+        let months = ["正月", "二月", "三月", "四月", "五月", "六月",
+                      "七月", "八月", "九月", "十月", "冬月", "腊月"]
+        let days = [
+            "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
+            "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+            "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十",
+        ]
+
+        let ganZhi = stems[(year - 1) % 10] + branches[(year - 1) % 12]
+        // Leap months share the previous month's number in Chinese calendar.
+        let isLeap: Bool = {
+            guard let previous = chineseCal.date(byAdding: .month, value: -1, to: date) else {
+                return false
+            }
+            return chineseCal.component(.month, from: previous) == month
+        }()
+        let leap = isLeap ? "闰" : ""
+        return "\(ganZhi)年 \(leap)\(months[month - 1])\(days[day - 1])"
+    }
+
     func incrementMonth() {
         monthOffset += 1
         updateCurrentlyShownDays()
@@ -515,6 +560,7 @@ final class CalendarMenuView: NSView {
     let model: CalendarModel
 
     private let monthButton = NSButton(title: "", target: nil, action: nil)
+    private let lunarLabel = NSTextField(labelWithString: "")
     private let leftButton = NSButton(title: "◀", target: nil, action: nil)
     private let rightButton = NSButton(title: "▶", target: nil, action: nil)
     private var cells: [DayCellView] = []
@@ -524,12 +570,13 @@ final class CalendarMenuView: NSView {
     private let cellHeight: CGFloat = 35
     private let interitem: CGFloat = 8
     private let columns = 7
+    private let headerHeight: CGFloat = 52
 
     init(model: CalendarModel) {
         self.model = model
         let rows = model.itemCount() / columns
         let gridHeight = CGFloat(rows) * cellHeight
-        let totalHeight: CGFloat = 40 + gridHeight
+        let totalHeight: CGFloat = headerHeight + gridHeight
         super.init(frame: NSRect(x: 0, y: 0, width: 350, height: totalHeight))
 
         setupHeader()
@@ -548,6 +595,15 @@ final class CalendarMenuView: NSView {
             addSubview(button)
         }
 
+        lunarLabel.isBezeled = false
+        lunarLabel.drawsBackground = false
+        lunarLabel.isEditable = false
+        lunarLabel.isSelectable = false
+        lunarLabel.alignment = .center
+        lunarLabel.font = NSFont.systemFont(ofSize: 11)
+        lunarLabel.textColor = NSColor.secondaryLabelColor
+        addSubview(lunarLabel)
+
         leftButton.target = self
         leftButton.action = #selector(leftClicked)
         rightButton.target = self
@@ -555,13 +611,29 @@ final class CalendarMenuView: NSView {
         monthButton.target = self
         monthButton.action = #selector(monthClicked)
 
-        leftButton.frame = NSRect(x: 0, y: bounds.height - 34, width: 60, height: 22)
-        rightButton.frame = NSRect(x: 290, y: bounds.height - 34, width: 60, height: 22)
-        monthButton.frame = NSRect(x: 80, y: bounds.height - 40, width: 190, height: 32)
+        layoutHeader()
 
         styleNavButton(leftButton)
         styleNavButton(rightButton)
         styleMonthButton(monthButton)
+    }
+
+    private func layoutHeader() {
+        // Title + lunar stacked near the top; arrows vertically centered on that stack.
+        let topPad: CGFloat = 2
+        let monthH: CGFloat = 22
+        let lunarH: CGFloat = 14
+        let stackGap: CGFloat = 1
+        let stackH = monthH + stackGap + lunarH
+        let contentTop = bounds.height - topPad
+        let stackBottom = contentTop - stackH
+        let stackMidY = stackBottom + stackH / 2
+        let arrowH: CGFloat = 22
+
+        monthButton.frame = NSRect(x: 80, y: contentTop - monthH, width: 190, height: monthH)
+        lunarLabel.frame = NSRect(x: 40, y: stackBottom, width: 270, height: lunarH)
+        leftButton.frame = NSRect(x: 0, y: stackMidY - arrowH / 2, width: 60, height: arrowH)
+        rightButton.frame = NSRect(x: 290, y: stackMidY - arrowH / 2, width: 60, height: arrowH)
     }
 
     private func setupGrid(rows: Int) {
@@ -626,6 +698,7 @@ final class CalendarMenuView: NSView {
         styleMonthButton(monthButton)
         styleNavButton(leftButton)
         styleNavButton(rightButton)
+        lunarLabel.stringValue = model.getLunarMonthHeader()
 
         let count = min(cells.count, model.itemCount())
         for i in 0..<count {
@@ -637,6 +710,112 @@ final class CalendarMenuView: NSView {
     @objc private func leftClicked() { model.decrementMonth() }
     @objc private func rightClicked() { model.incrementMonth() }
     @objc private func monthClicked() { model.resetMonth() }
+}
+
+// MARK: - Month abbreviation bar (above Settings)
+
+final class MonthAbbreviationView: NSView {
+    private static let abbreviations = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+    private static let fullNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ]
+
+    private var buttons: [NSButton] = []
+    private var expandedIndex: Int?
+
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 350, height: 28))
+        setupButtons()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func setupButtons() {
+        for (index, abbr) in Self.abbreviations.enumerated() {
+            let button = NSButton(title: abbr, target: self, action: #selector(monthTapped(_:)))
+            button.tag = index
+            button.isBordered = false
+            button.setButtonType(.momentaryChange)
+            button.wantsLayer = true
+            button.alignment = .center
+            addSubview(button)
+            buttons.append(button)
+        }
+        layoutButtons()
+        refreshTitles()
+    }
+
+    override func layout() {
+        super.layout()
+        layoutButtons()
+    }
+
+    private func layoutButtons() {
+        guard !buttons.isEmpty else { return }
+        // Match calendar grid side inset so Jan/Dec sit at the content edges.
+        let inset: CGFloat = 10
+        let available = max(bounds.width - inset * 2, 1)
+        var widths: [CGFloat] = []
+        var totalPreferred: CGFloat = 0
+
+        for index in buttons.indices {
+            let title = displayTitle(for: index)
+            let font = titleFont(expanded: index == expandedIndex)
+            let width = max((title as NSString).size(withAttributes: [.font: font]).width + 4, 1)
+            widths.append(width)
+            totalPreferred += width
+        }
+
+        // Always stretch so the row spans full width (minus inset).
+        let scale = available / totalPreferred
+        var x = inset
+        for (index, button) in buttons.enumerated() {
+            let w = widths[index] * scale
+            button.frame = NSRect(x: x, y: 2, width: w, height: bounds.height - 4)
+            x += w
+        }
+    }
+
+    private func displayTitle(for index: Int) -> String {
+        index == expandedIndex ? Self.fullNames[index] : Self.abbreviations[index]
+    }
+
+    private func titleFont(expanded: Bool) -> NSFont {
+        NSFont.systemFont(ofSize: expanded ? 11 : 10, weight: expanded ? .medium : .regular)
+    }
+
+    private func refreshTitles() {
+        for (index, button) in buttons.enumerated() {
+            let expanded = index == expandedIndex
+            let title = displayTitle(for: index)
+            let color = expanded ? NSColor.labelColor : NSColor.secondaryLabelColor
+            let font = titleFont(expanded: expanded)
+            let style = NSMutableParagraphStyle()
+            style.alignment = .center
+
+            func attrs(alpha: CGFloat) -> [NSAttributedString.Key: Any] {
+                [
+                    .foregroundColor: color.withAlphaComponent(alpha),
+                    .font: font,
+                    .paragraphStyle: style,
+                ]
+            }
+            button.attributedTitle = NSAttributedString(string: title, attributes: attrs(alpha: 1))
+            button.attributedAlternateTitle = NSAttributedString(string: title, attributes: attrs(alpha: 0.55))
+        }
+        layoutButtons()
+    }
+
+    @objc private func monthTapped(_ sender: NSButton) {
+        let index = sender.tag
+        expandedIndex = (expandedIndex == index) ? nil : index
+        refreshTitles()
+    }
 }
 
 // MARK: - Settings window
@@ -802,6 +981,10 @@ final class AppController: NSObject, NSMenuDelegate {
         calendarItem.view = calendarView
         statusMenu.addItem(calendarItem)
         statusMenu.addItem(.separator())
+
+        let monthAbbrevItem = NSMenuItem()
+        monthAbbrevItem.view = MonthAbbreviationView()
+        statusMenu.addItem(monthAbbrevItem)
 
         let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self

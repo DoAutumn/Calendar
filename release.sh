@@ -89,9 +89,10 @@ cask "$CASK_TOKEN" do
 
   app "Calendar.app"
 
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Calendar.app"]
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args: ["-dr", "com.apple.quarantine", "{{appdir}}/Calendar.app"],
+        must_succeed: false
   end
 
   uninstall quit: "io.github.calendar"

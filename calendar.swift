@@ -361,12 +361,6 @@ final class CalendarModel {
         }
     }
 
-    func pause() {
-        timer?.invalidate()
-        timer = nil
-        tick = nil
-    }
-
     func itemCount() -> Int { shownItemCount }
 
     func getItemAt(index: Int) -> Day {
@@ -1361,16 +1355,6 @@ final class AppController: NSObject, NSMenuDelegate {
         bindModelCallbacks()
     }
 
-    func resume() {
-        bindModelCallbacks()
-    }
-
-    func pause() {
-        model.pause()
-        model.onAPIError = nil
-        model.onAPIIdle = nil
-    }
-
     func menuWillOpen(_ menu: NSMenu) {
         updateMonthAbbrevVisibility()
         model.refreshReminders()
@@ -1449,14 +1433,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
-    }
-
-    func applicationDidChangeOcclusionState(_ notification: Notification) {
-        if NSApp.occlusionState.contains(.visible) {
-            controller.resume()
-        } else {
-            controller.pause()
-        }
     }
 }
 

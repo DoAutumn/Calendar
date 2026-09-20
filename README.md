@@ -13,6 +13,7 @@
   - `休` — statutory holiday
   - `班` — makeup workday
   - On the first lunar day of a month, the lunar month name is shown
+- **Reminders**: incomplete items with due dates show as accent dots; hover for titles/times, click to open Reminders
 - **API failure falls back to Gregorian-only** (calendar stays usable)
 - **Settings window** for time/date display options
 

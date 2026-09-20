@@ -1,11 +1,13 @@
 // Calendar — a menu-bar clock + month calendar for macOS.
 // Shows lunar dates, statutory holidays (休) and makeup workdays (班)
 // via the TianAPI jiejiari endpoint. Falls back to Gregorian-only when
-// the API is unavailable.
+// the API is unavailable. Incomplete Reminders are shown as dots on
+// matching due dates.
 //
 // Build via ./build_app.sh.
 
 import Cocoa
+import EventKit
 
 // MARK: - Settings
 
@@ -143,6 +145,12 @@ final class HolidayAPI {
 
 // MARK: - Calendar model
 
+struct ReminderItem {
+    let title: String
+    let timeText: String?
+    let sortDate: Date
+}
+
 struct Day {
     var isNumber = false
     var isToday = false
@@ -151,6 +159,7 @@ struct Day {
     var text = "0"
     var lunarDay: String?
     var holidayDaycode: Int?
+    var reminders: [ReminderItem] = []
 }
 
 final class CalendarModel {
@@ -158,6 +167,7 @@ final class CalendarModel {
     let formatter = DateFormatter()
     let monthFormatter = DateFormatter()
     private let dateFormatter = DateFormatter()
+    private let reminderTimeFormatter = DateFormatter()
     var locale: Locale!
     private var timer: Timer?
 
@@ -183,6 +193,10 @@ final class CalendarModel {
     private var lastFetchError: String?
     private var fetchGeneration = 0
 
+    private let eventStore = EKEventStore()
+    private var remindersByDate: [String: [ReminderItem]] = [:]
+    private var remindersFetchGeneration = 0
+
     init() {
         let languageIdentifier = Locale.preferredLanguages[0]
         locale = Locale(identifier: languageIdentifier)
@@ -192,6 +206,10 @@ final class CalendarModel {
 
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        reminderTimeFormatter.locale = locale
+        reminderTimeFormatter.dateStyle = .none
+        reminderTimeFormatter.timeStyle = .short
 
         calendar.locale = locale
         weekdays = calendar.veryShortWeekdaySymbols
@@ -286,6 +304,7 @@ final class CalendarModel {
         fetchHolidayData(forMonth: lastMonth)
         fetchHolidayData(forMonth: currentMonth!)
         fetchHolidayData(forMonth: nextMonth)
+        refreshReminders()
     }
 
     private func beginHolidayFetch() {
@@ -379,6 +398,7 @@ final class CalendarModel {
 
         let weekday = calendar.component(.weekday, from: date)
         day.isWeekend = weekday == 1 || weekday == 7
+        day.reminders = remindersByDate[dateString] ?? []
         return day
     }
 
@@ -463,6 +483,248 @@ final class CalendarModel {
         fetchHolidayData(forMonth: lastMonth)
         fetchHolidayData(forMonth: currentMonth)
         fetchHolidayData(forMonth: nextMonth)
+        refreshReminders()
+    }
+
+    func refreshReminders() {
+        remindersFetchGeneration += 1
+        let generation = remindersFetchGeneration
+        ensureRemindersAccess { [weak self] granted in
+            guard let self, generation == self.remindersFetchGeneration else { return }
+            guard granted else {
+                if !self.remindersByDate.isEmpty {
+                    self.remindersByDate.removeAll()
+                    self.onCalendarUpdate?()
+                }
+                return
+            }
+            self.fetchReminders(generation: generation)
+        }
+    }
+
+    private func hasRemindersAccess() -> Bool {
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        if #available(macOS 14.0, *) {
+            return status == .fullAccess
+        }
+        return status == .authorized
+    }
+
+    private func ensureRemindersAccess(completion: @escaping (Bool) -> Void) {
+        if hasRemindersAccess() {
+            completion(true)
+            return
+        }
+
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        guard status == .notDetermined else {
+            completion(false)
+            return
+        }
+
+        let finish: (Bool) -> Void = { granted in
+            DispatchQueue.main.async { completion(granted) }
+        }
+
+        if #available(macOS 14.0, *) {
+            eventStore.requestFullAccessToReminders { granted, _ in
+                finish(granted)
+            }
+        } else {
+            eventStore.requestAccess(to: .reminder) { granted, _ in
+                finish(granted)
+            }
+        }
+    }
+
+    private func fetchReminders(generation: Int) {
+        guard let startDay = lastFirstWeekdayLastMonth else { return }
+        let dayCount = max(shownItemCount - daysInWeek, 1)
+        guard let endDay = calendar.date(byAdding: .day, value: dayCount, to: startDay) else { return }
+
+        let start = calendar.startOfDay(for: startDay)
+        let end = calendar.startOfDay(for: endDay)
+        let predicate = eventStore.predicateForIncompleteReminders(
+            withDueDateStarting: start,
+            ending: end,
+            calendars: nil
+        )
+
+        eventStore.fetchReminders(matching: predicate) { [weak self] reminders in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                guard generation == self.remindersFetchGeneration else { return }
+
+                var grouped: [String: [ReminderItem]] = [:]
+                for reminder in reminders ?? [] {
+                    guard let comps = reminder.dueDateComponents,
+                          let dueDate = self.calendar.date(from: comps) else { continue }
+
+                    let key = self.dateFormatter.string(from: dueDate)
+                    let title = reminder.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let displayTitle = (title?.isEmpty == false) ? title! : "无标题"
+                    let timeText: String? = (comps.hour != nil)
+                        ? self.reminderTimeFormatter.string(from: dueDate)
+                        : nil
+                    let item = ReminderItem(title: displayTitle, timeText: timeText, sortDate: dueDate)
+                    grouped[key, default: []].append(item)
+                }
+
+                for key in grouped.keys {
+                    grouped[key]?.sort {
+                        if $0.sortDate != $1.sortDate { return $0.sortDate < $1.sortDate }
+                        return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+                    }
+                }
+
+                self.remindersByDate = grouped
+                self.onCalendarUpdate?()
+            }
+        }
+    }
+}
+
+// MARK: - Reminder tooltip
+
+final class ReminderTooltipController {
+    static let shared = ReminderTooltipController()
+
+    private var panel: NSPanel?
+
+    private init() {}
+
+    func show(items: [ReminderItem], relativeTo view: NSView) {
+        hide()
+        guard !items.isEmpty, let hostWindow = view.window else { return }
+
+        let content = ReminderTooltipView(items: items)
+        let size = content.intrinsicContentSize
+        content.frame = NSRect(origin: .zero, size: size)
+
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.transient, .ignoresCycle]
+        panel.hidesOnDeactivate = false
+        panel.ignoresMouseEvents = true
+        panel.contentView = content
+
+        let localRect = view.convert(view.bounds, to: nil)
+        let screenRect = hostWindow.convertToScreen(localRect)
+        var origin = NSPoint(
+            x: screenRect.midX - size.width / 2,
+            y: screenRect.minY - size.height - 6
+        )
+
+        if let screen = hostWindow.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
+            if origin.y < visible.minY + 4 {
+                origin.y = screenRect.maxY + 6
+            }
+        }
+
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        panel.orderFront(nil)
+        self.panel = panel
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+        panel = nil
+    }
+}
+
+final class ReminderTooltipView: NSView {
+    private let effectView = NSVisualEffectView()
+    private let stack = NSStackView()
+    private let maxWidth: CGFloat = 240
+    private let minWidth: CGFloat = 120
+    private let padding = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+
+    init(items: [ReminderItem]) {
+        super.init(frame: .zero)
+        wantsLayer = true
+
+        effectView.material = .hudWindow
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = 8
+        effectView.layer?.masksToBounds = true
+        addSubview(effectView)
+
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        effectView.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: effectView.topAnchor, constant: padding.top),
+            stack.bottomAnchor.constraint(equalTo: effectView.bottomAnchor, constant: -padding.bottom),
+            stack.leadingAnchor.constraint(equalTo: effectView.leadingAnchor, constant: padding.left),
+            stack.trailingAnchor.constraint(equalTo: effectView.trailingAnchor, constant: -padding.right),
+        ])
+
+        for item in items {
+            stack.addArrangedSubview(makeRow(item))
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var intrinsicContentSize: NSSize {
+        var rowWidth: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for (index, view) in stack.arrangedSubviews.enumerated() {
+            let size = view.fittingSize
+            rowWidth = max(rowWidth, size.width)
+            rowHeight += size.height
+            if index > 0 { rowHeight += stack.spacing }
+        }
+        let width = min(max(rowWidth + padding.left + padding.right, minWidth), maxWidth)
+        let height = rowHeight + padding.top + padding.bottom
+        return NSSize(width: width, height: height)
+    }
+
+    override func layout() {
+        super.layout()
+        effectView.frame = bounds
+    }
+
+    private func makeRow(_ item: ReminderItem) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .firstBaseline
+        row.spacing = 8
+
+        if let timeText = item.timeText {
+            let timeLabel = NSTextField(labelWithString: timeText)
+            timeLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            timeLabel.textColor = NSColor.secondaryLabelColor
+            timeLabel.setContentHuggingPriority(.required, for: .horizontal)
+            timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            row.addArrangedSubview(timeLabel)
+        }
+
+        let titleLabel = NSTextField(labelWithString: item.title)
+        titleLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        titleLabel.textColor = NSColor.labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.maximumNumberOfLines = 1
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        row.addArrangedSubview(titleLabel)
+
+        return row
     }
 }
 
@@ -472,12 +734,16 @@ final class DayCellView: NSView {
     private let dayLabel = NSTextField(labelWithString: "")
     private let lunarLabel = NSTextField(labelWithString: "")
     private let holidayLabel = NSTextField(labelWithString: "")
+    private let reminderDot = NSView(frame: .zero)
 
     private let holidayTextColor = NSColor(red: 212 / 255, green: 57 / 255, blue: 0, alpha: 1)
     private let workdayTextColor = NSColor(red: 90 / 255, green: 90 / 255, blue: 90 / 255, alpha: 1)
     private let holidayBackgroundColor = NSColor(red: 253 / 255, green: 247 / 255, blue: 244 / 255, alpha: 1)
     private let workdayBackgroundColor = NSColor(red: 221 / 255, green: 221 / 255, blue: 221 / 255, alpha: 1)
     private let todayBorderColor = NSColor(red: 0.149, green: 0.286, blue: 0.859, alpha: 1)
+
+    private var reminders: [ReminderItem] = []
+    private var trackingArea: NSTrackingArea?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -495,6 +761,12 @@ final class DayCellView: NSView {
             addSubview(label)
         }
 
+        reminderDot.wantsLayer = true
+        reminderDot.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        reminderDot.layer?.cornerRadius = 2.5
+        reminderDot.isHidden = true
+        addSubview(reminderDot)
+
         dayLabel.font = NSFont.systemFont(ofSize: 15)
         lunarLabel.font = NSFont.systemFont(ofSize: 8)
         lunarLabel.textColor = NSColor.secondaryLabelColor
@@ -505,18 +777,60 @@ final class DayCellView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let options: NSTrackingArea.Options = [
+            .mouseEnteredAndExited,
+            .activeAlways,
+            .inVisibleRect,
+        ]
+        let area = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
     override func layout() {
         super.layout()
         let w = bounds.width
         dayLabel.frame = NSRect(x: 0, y: bounds.height - 22, width: w, height: 20)
         lunarLabel.frame = NSRect(x: 0, y: 1, width: w, height: 12)
         holidayLabel.frame = NSRect(x: -2, y: bounds.height - 15, width: 17, height: 14)
+        reminderDot.frame = NSRect(x: bounds.width - 9, y: bounds.height - 9, width: 5, height: 5)
+    }
+
+    override func resetCursorRects() {
+        if !reminders.isEmpty {
+            addCursorRect(bounds, cursor: .pointingHand)
+        }
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        guard !reminders.isEmpty else { return }
+        ReminderTooltipController.shared.show(items: reminders, relativeTo: self)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        ReminderTooltipController.shared.hide()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if !reminders.isEmpty {
+            ReminderTooltipController.shared.hide()
+            Self.openRemindersApp()
+            return
+        }
+        super.mouseUp(with: event)
     }
 
     func configure(_ day: Day) {
+        reminders = day.reminders
         dayLabel.stringValue = day.text
         lunarLabel.stringValue = day.isNumber ? (day.lunarDay ?? "") : ""
         holidayLabel.stringValue = ""
+        reminderDot.isHidden = true
 
         layer?.backgroundColor = CGColor.clear
         layer?.borderWidth = 0
@@ -529,6 +843,8 @@ final class DayCellView: NSView {
             dayLabel.font = NSFont.boldSystemFont(ofSize: 15)
             dayLabel.textColor = NSColor.secondaryLabelColor
             lunarLabel.stringValue = ""
+            reminders = []
+            window?.invalidateCursorRects(for: self)
             return
         }
 
@@ -556,6 +872,20 @@ final class DayCellView: NSView {
 
         if day.isWeekend, holidayLabel.stringValue.isEmpty {
             dayLabel.textColor = holidayTextColor
+        }
+
+        reminderDot.isHidden = reminders.isEmpty
+        reminderDot.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        window?.invalidateCursorRects(for: self)
+    }
+
+    private static func openRemindersApp() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.reminders") {
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+            return
+        }
+        if let url = URL(string: "x-apple-reminderkit://") {
+            NSWorkspace.shared.open(url)
         }
     }
 }
@@ -700,6 +1030,7 @@ final class CalendarMenuView: NSView {
     }
 
     func reload() {
+        ReminderTooltipController.shared.hide()
         monthButton.title = model.getMonth()
         styleMonthButton(monthButton)
         styleNavButton(leftButton)
@@ -1042,8 +1373,13 @@ final class AppController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         updateMonthAbbrevVisibility()
+        model.refreshReminders()
         updateCalendar()
         updateMenuTime()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        ReminderTooltipController.shared.hide()
     }
 
     private func updateMonthAbbrevVisibility() {

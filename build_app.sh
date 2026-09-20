@@ -23,6 +23,7 @@ rm -rf "$ICONSET"
 echo "==> Compiling Swift binary"
 DEPLOYMENT_TARGET="${MACOS_DEPLOYMENT_TARGET:-11.0}"
 swiftc -O -target "$(uname -m)-apple-macos${DEPLOYMENT_TARGET}" \
+    -framework EventKit \
     -o "$APP/Contents/MacOS/Calendar" "$ROOT/calendar.swift"
 
 echo "==> Writing Info.plist (version $VERSION)"
@@ -45,6 +46,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key>  <string>11.0</string>
     <key>NSHighResolutionCapable</key> <true/>
     <key>NSHumanReadableCopyright</key> <string>Based on Emil Kreutzman's Calendar. MIT License.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>用于在日历上显示未完成的提醒事项。</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>用于在日历上显示未完成的提醒事项。</string>
 </dict>
 </plist>
 PLIST

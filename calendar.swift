@@ -170,6 +170,8 @@ final class CalendarModel {
     private let reminderTimeFormatter = DateFormatter()
     var locale: Locale!
     private var timer: Timer?
+    /// Keeps App Nap from throttling the menu-bar clock timer into multi-second gaps.
+    private var clockActivity: NSObjectProtocol?
 
     private(set) var shownItemCount = 0
     private(set) var weekdays: [String] = []
@@ -178,7 +180,7 @@ final class CalendarModel {
 
     private(set) var currentMonth: Date?
     private var lastFirstWeekdayLastMonth: Date?
-    private var lastTick: Date? = Date()
+    private var lastTick: Date?
     private var tick: Date?
     private var tickInterval: Double = 60
 
@@ -249,36 +251,64 @@ final class CalendarModel {
     }
 
     private func onTick() {
-        guard let last = lastTick else { return }
-        tick = calendar.date(byAdding: .second, value: Int(tickInterval), to: last)
-
+        let now = Date()
+        // Always display wall-clock time. Never advance a synthetic lastTick+interval —
+        // repeating Timer fires can be coalesced/throttled (App Nap), and that would leave
+        // the menu bar permanently behind by roughly one throttled gap (~10–60s).
+        tick = now
         onTimeUpdate?()
-        if let tick, !calendar.isDate(tick, equalTo: last, toGranularity: .day) {
+
+        if let last = lastTick, !calendar.isDate(now, equalTo: last, toGranularity: .day) {
             onCalendarUpdate?()
         }
-
-        let now = Date()
-        if let tick, abs(tick.timeIntervalSince1970 - now.timeIntervalSince1970) > 0.5 {
-            self.tick = now
-        }
-        lastTick = self.tick
+        lastTick = now
+        scheduleNextTick()
     }
 
     private func initTiming(useSeconds: Bool) {
         tickInterval = useSeconds ? 1 : 60
-        let now = Date()
-        let fireAfter = useSeconds ? 1 : 60 - calendar.component(.second, from: now)
+        updateClockActivity(useSeconds: useSeconds)
+        onTick()
+    }
 
+    /// One-shot timer aimed at the next second/minute boundary from Date(), then rescheduled.
+    /// Avoids cumulative drift from repeating Timer + synthetic tick arithmetic.
+    private func scheduleNextTick() {
         timer?.invalidate()
+        timer = nil
 
-        let fireAt = calendar.date(byAdding: .second, value: fireAfter, to: now)!
-        timer = Timer(fire: fireAt, interval: tickInterval, repeats: true) { [weak self] _ in
+        let now = Date()
+        let fireDelay: TimeInterval
+        if tickInterval <= 1 {
+            let fraction = now.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)
+            fireDelay = max(0.001, fraction < 0.001 ? 1 : (1 - fraction))
+        } else {
+            let second = calendar.component(.second, from: now)
+            let fraction = now.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)
+            var delay = Double(60 - second) - fraction
+            if delay < 0.001 { delay = 60 - fraction }
+            fireDelay = max(0.001, delay)
+        }
+
+        let next = Timer(timeInterval: fireDelay, repeats: false) { [weak self] _ in
             self?.onTick()
         }
-        RunLoop.main.add(timer!, forMode: .common)
+        next.tolerance = min(0.05, fireDelay * 0.1)
+        RunLoop.main.add(next, forMode: .common)
+        timer = next
+    }
 
-        lastTick = calendar.date(byAdding: .second, value: Int(-tickInterval), to: now)
-        onTick()
+    private func updateClockActivity(useSeconds: Bool) {
+        if let clockActivity {
+            ProcessInfo.processInfo.endActivity(clockActivity)
+            self.clockActivity = nil
+        }
+        // Second-resolution clocks need timely wakes; minute clocks can tolerate App Nap.
+        guard useSeconds else { return }
+        clockActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep],
+            reason: "Menu bar clock second updates"
+        )
     }
 
     private func daysInMonth(month: Date) -> Int {
@@ -397,8 +427,8 @@ final class CalendarModel {
     }
 
     func getFormattedDate() -> String {
-        guard let tick else { return "" }
-        return formatter.string(from: tick)
+        // Always format wall clock — never a drifted synthetic tick.
+        formatter.string(from: Date())
     }
 
     func getMonth() -> String {

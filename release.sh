@@ -69,6 +69,12 @@ echo "==> Creating GitHub release $TAG"
 gh release create "$TAG" "$ZIP" --repo "$GH_REPO" --generate-notes
 
 SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+
+# Zip is on GitHub now; drop local dist/ (.app / .zip) so Spotlight does not
+# keep serving a second Calendar next to /Applications.
+echo "==> Cleaning dist/"
+rm -rf "$ROOT/dist"
+
 echo "==> Writing cask $CASK_TOKEN $VERSION ($SHA)"
 cat > "$CASK" <<CASK
 cask "$CASK_TOKEN" do

@@ -8,7 +8,6 @@
 
 import Cocoa
 import EventKit
-import Network
 
 // MARK: - Settings
 
@@ -201,13 +200,6 @@ final class CalendarModel {
     private let holidayRetryDelays: [TimeInterval] = [2, 5, 15, 30]
     private var holidayRetryAttempt = 0
     private var holidayRetryWorkItem: DispatchWorkItem?
-    private let pathMonitor = NWPathMonitor()
-    private let pathMonitorQueue = DispatchQueue(label: "calendar.pathMonitor")
-    private var pathWasSatisfied: Bool?
-    /// Coalesce offline→online flaps; also used as the "recent success" skip window.
-    private let networkRecoveryDebounce: TimeInterval = 5
-    private var networkRecoveryWorkItem: DispatchWorkItem?
-    private var lastHolidayFetchSuccessAt: Date?
     /// True when the current batch received at least one successful month payload.
     private var holidayFetchGotData = false
 
@@ -237,13 +229,10 @@ final class CalendarModel {
         shownItemCount = daysInWeek * (maxWeeksInMonth + 2 + 1)
 
         updateCurrentlyShownDays()
-        startNetworkMonitoring()
     }
 
     deinit {
-        pathMonitor.cancel()
         cancelHolidayRetries()
-        networkRecoveryWorkItem?.cancel()
     }
 
     func setDateFormat() {
@@ -364,8 +353,6 @@ final class CalendarModel {
         if resetRetry {
             cancelHolidayRetries()
             holidayRetryAttempt = 0
-            networkRecoveryWorkItem?.cancel()
-            networkRecoveryWorkItem = nil
         }
         fetchGeneration += 1
         if clearHolidayInfo {
@@ -412,14 +399,11 @@ final class CalendarModel {
     }
 
     private func finishHolidayFetchBatch() {
-        // Use gotData (not holidayInfo.isEmpty) so a preserved cache after network
-        // recovery still retries when the new batch fails entirely.
+        // Use gotData (not holidayInfo.isEmpty) so a preserved cache during
+        // silent retries still retries when the new batch fails entirely.
         if let err = lastFetchError, !holidayFetchGotData {
             scheduleHolidayRetry(errorMessage: err)
         } else {
-            if holidayFetchGotData {
-                lastHolidayFetchSuccessAt = Date()
-            }
             cancelHolidayRetries()
             holidayRetryAttempt = 0
             onAPIIdle?()
@@ -460,51 +444,6 @@ final class CalendarModel {
     private func cancelHolidayRetries() {
         holidayRetryWorkItem?.cancel()
         holidayRetryWorkItem = nil
-    }
-
-    private func startNetworkMonitoring() {
-        pathMonitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                let satisfied = path.status == .satisfied
-                let wasSatisfied = self.pathWasSatisfied
-                self.pathWasSatisfied = satisfied
-                // Skip the initial callback; only react to offline → online transitions.
-                guard satisfied, wasSatisfied == false else { return }
-                self.scheduleHolidaysAfterNetworkRecovery()
-            }
-        }
-        pathMonitor.start(queue: pathMonitorQueue)
-    }
-
-    /// Debounce flaps; do not cancel in-flight retries here so a 2s retry can
-    /// still win the login-without-network case before this fires.
-    private func scheduleHolidaysAfterNetworkRecovery() {
-        networkRecoveryWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            self?.performNetworkRecoveryFetchIfNeeded()
-        }
-        networkRecoveryWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + networkRecoveryDebounce, execute: work)
-    }
-
-    private func performNetworkRecoveryFetchIfNeeded() {
-        if !holidayInfo.isEmpty,
-           let lastSuccess = lastHolidayFetchSuccessAt,
-           Date().timeIntervalSince(lastSuccess) < networkRecoveryDebounce {
-            return
-        }
-
-        cancelHolidayRetries()
-        holidayRetryAttempt = 0
-        guard let currentMonth else { return }
-        // Preserve cached holidays so a failed recovery does not blank the UI.
-        beginHolidayFetch(resetRetry: false, clearHolidayInfo: false)
-        let lastMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth)!
-        let nextMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth)!
-        fetchHolidayData(forMonth: lastMonth)
-        fetchHolidayData(forMonth: currentMonth)
-        fetchHolidayData(forMonth: nextMonth)
     }
 
     func subscribe(onTimeUpdate: @escaping () -> Void, onCalendarUpdate: @escaping () -> Void) {
@@ -626,9 +565,6 @@ final class CalendarModel {
 
     func refreshHolidayData() {
         guard let currentMonth else { return }
-        // Manual refresh cancels automatic retries and a pending recovery fetch.
-        networkRecoveryWorkItem?.cancel()
-        networkRecoveryWorkItem = nil
         beginHolidayFetch(resetRetry: true, clearHolidayInfo: true)
         let lastMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth)!
         let nextMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth)!
